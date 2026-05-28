@@ -12,6 +12,13 @@
 namespace clang {
 namespace clangd {
 
+namespace {
+// Tracks end-to-end latency of high level bsp calls. Measurements are in
+// seconds.
+constexpr trace::Metric BSPLatency("bsp_latency", trace::Metric::Distribution,
+                                   "method_name");
+} // namespace
+
 // MessageHandler dispatches incoming BSP messages.
 // It handles cross-cutting concerns:
 //  - serializes/deserializes protocol objects to JSON
@@ -24,10 +31,10 @@ public:
   MessageHandler(ClangdBSPClient &Client) : Client(Client) {}
 
   bool onNotify(llvm::StringRef Method, llvm::json::Value Params) override {
-    // trace::Span Tracer(Method, LSPLatency);
-    // SPAN_ATTACH(Tracer, "Params", Params);
+    trace::Span Tracer(Method, BSPLatency);
+    SPAN_ATTACH(Tracer, "Params", Params);
     // WithContext HandlerContext(handlerContext());
-    // log("<-- {0}", Method);
+    log("<-- {0}", Method);
     // auto Handler = Server.Handlers.NotificationHandlers.find(Method);
     // if (Handler != Server.Handlers.NotificationHandlers.end()) {
     //   Handler->second(std::move(Params));
@@ -48,10 +55,10 @@ public:
     // WithContext HandlerContext(handlerContext());
     // // Calls can be canceled by the client. Add cancellation context.
     // WithContext WithCancel(cancelableRequestContext(ID));
-    // trace::Span Tracer(Method, LSPLatency);
-    // SPAN_ATTACH(Tracer, "Params", Params);
+    trace::Span Tracer(Method, BSPLatency);
+    SPAN_ATTACH(Tracer, "Params", Params);
     // ReplyOnce Reply(ID, Method, &Server, Tracer.Args);
-    // log("<-- {0}({1})", Method, ID);
+    log("<-- {0}({1})", Method, ID);
     // auto Handler = Server.Handlers.MethodHandlers.find(Method);
     // if (Handler != Server.Handlers.MethodHandlers.end()) {
     //   Handler->second(std::move(Params), std::move(Reply));

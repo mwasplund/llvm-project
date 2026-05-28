@@ -44,7 +44,10 @@ public:
     config::Provider *ConfigProvider = nullptr;
     /// Look for compilation databases, rather than using compile commands
     /// set via LSP (extensions) only.
-    bool UseDirBasedCDB = true;
+    bool UseDirBasedCDB = false;
+    /// Use a BSP to interoperate with the build system to get compile
+    /// commands and ensure modules are pre-built.
+    bool UseBuildServerCDB = true;
     /// The offset-encoding to use, or std::nullopt to negotiate it over LSP.
     std::optional<OffsetEncoding> Encoding;
     /// If set, periodically called to release memory.
@@ -133,7 +136,8 @@ private:
                   Callback<std::vector<Location>>);
   void onGoToImplementation(const TextDocumentPositionParams &,
                             Callback<std::vector<Location>>);
-  void onReference(const ReferenceParams &, Callback<std::vector<ReferenceLocation>>);
+  void onReference(const ReferenceParams &,
+                   Callback<std::vector<ReferenceLocation>>);
   void onSwitchSourceHeader(const TextDocumentIdentifier &,
                             Callback<std::optional<URIForFile>>);
   void onDocumentHighlight(const TextDocumentPositionParams &,
@@ -243,7 +247,7 @@ private:
   /// Used to indicate the ClangdLSPServer is being destroyed.
   std::atomic<bool> IsBeingDestroyed = {false};
 
-  // FIXME: The caching is a temporary solution to get corresponding clangd 
+  // FIXME: The caching is a temporary solution to get corresponding clangd
   // diagnostic from a LSP diagnostic.
   // Ideally, ClangdServer can generate an identifier for each diagnostic,
   // emit them via the LSP's data field (which was newly added in LSP 3.16).
@@ -259,11 +263,9 @@ private:
     return {LSPDiag.range, LSPDiag.message};
   }
   /// A map from LSP diagnostic to clangd-naive diagnostic.
-  typedef std::map<DiagKey, ClangdServer::DiagRef>
-      DiagnosticToDiagRefMap;
+  typedef std::map<DiagKey, ClangdServer::DiagRef> DiagnosticToDiagRefMap;
   /// Caches the mapping LSP and clangd-naive diagnostics per file.
-  llvm::StringMap<DiagnosticToDiagRefMap>
-      DiagRefMap;
+  llvm::StringMap<DiagnosticToDiagRefMap> DiagRefMap;
 
   // Last semantic-tokens response, for incremental requests.
   std::mutex SemanticTokensMutex;
