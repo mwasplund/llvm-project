@@ -1,4 +1,4 @@
-//===--- ClangdBSPClient.cpp - BSP client ------------------------*- C++-*-===//
+//===--- BSPClient.cpp - BSP client ------------------------------*- C++-*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,8 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ClangdBSPClient.h"
-#include "LSPBinder.h"
+#include "BSPClient.h"
+#include "support/Logger.h"
+#include "support/Trace.h"
+#include "llvm/Support/raw_ostream.h"
+#include <array>
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace clang {
 namespace clangd {
@@ -26,9 +31,9 @@ constexpr trace::Metric BSPLatency("bsp_latency", trace::Metric::Distribution,
 //  - cancellation handling
 //  - basic call tracing
 // MessageHandler ensures that initialize() is called before any other handler.
-class ClangdBSPClient::MessageHandler : public Transport::MessageHandler {
+class BSPClient::MessageHandler : public Transport::MessageHandler {
 public:
-  MessageHandler(ClangdBSPClient &Client) : Client(Client) {}
+  MessageHandler(BSPClient &Client) : Client(Client) {}
 
   bool onNotify(llvm::StringRef Method, llvm::json::Value Params) override {
     trace::Span Tracer(Method, BSPLatency);
@@ -278,24 +283,97 @@ private:
   //                      /*ReplyHandler*/ Callback<llvm::json::Value>>>
   //     ReplyCallbacks; /* GUARDED_BY(CallMutex) */
 
-  ClangdBSPClient &Client;
+  BSPClient &Client;
 };
 
-ClangdBSPClient::ClangdBSPClient(Transport &Transp)
-    : Transp(Transp), MsgHandler(new MessageHandler(*this)) {}
+BSPClient::BSPClient(Path BuildServer)
+    : BuildServer(BuildServer), Transport(),
+      MsgHandler(new MessageHandler(*this)) {
+  launchServer();
+  run();
+}
 
-ClangdBSPClient::~ClangdBSPClient() {}
+BSPClient::~BSPClient() {}
 
-bool ClangdBSPClient::run() {
+bool BSPClient::run() {
+  auto ParamsTest = llvm::json::Value(llvm::json::Object{
+      {"test", "123"},
+  });
+  auto IdTest = llvm::json::Value(123);
+  Transport->call("initialize", ParamsTest, IdTest);
+
   // Run the Build Server loop.
   bool CleanExit = true;
-  if (auto Err = Transp.loop(*MsgHandler)) {
+  if (auto Err = Transport->loop(*MsgHandler)) {
     elog("Transport error: {0}", std::move(Err));
     CleanExit = false;
+  }
+
+  auto Params = llvm::json::Value(llvm::json::Object{});
+  auto Id = llvm::json::Value(123);
+  Transport->call("exit", Params, Id);
+
+  PI = llvm::sys::Wait(PI, 10 /*timeout seconds*/);
+  if (PI.ReturnCode != 0) {
+    elog("BSP server exit not success: {0}", PI.ReturnCode);
   }
 
   return CleanExit;
 }
 
+void BSPClient::launchServer() {
+  // Create a pipe to send stdin to child
+  std::array<llvm::sys::pipe_t, 2> stdInPipe;
+  if (pipe2(stdInPipe.data(), O_NONBLOCK) < 0) {
+    elog("Failed to create stdInPipe");
+    return;
+  }
+
+  // Create a pipe to send stdout to parent
+  std::array<llvm::sys::pipe_t, 2> stdOutPipe;
+  if (pipe2(stdOutPipe.data(), O_NONBLOCK) < 0) {
+    elog("Failed to create stdOutPipe");
+    return;
+  }
+
+  // Create a pipe to send stderr to parent
+  std::array<llvm::sys::pipe_t, 2> stdErrPipe;
+  if (pipe2(stdErrPipe.data(), O_NONBLOCK) < 0) {
+    elog("Failed to create stdErrPipe");
+    return;
+  }
+
+  std::optional<std::array<llvm::sys::pipe_t, 2>> Redirects[] = {
+      stdInPipe,
+      stdOutPipe,
+      stdErrPipe,
+  };
+
+  // Spawns the process and moves on immediately
+  std::vector<llvm::StringRef> args = {BuildServer};
+  PI = llvm::sys::ExecuteNoWait(BuildServer, args, std::nullopt, {}, Redirects);
+
+  // Close our handle that are used for the child
+  close(stdInPipe[0]);
+  close(stdOutPipe[1]);
+  close(stdErrPipe[1]);
+
+  if (PI.Pid != llvm::sys::ProcessInfo::InvalidPid) {
+    elog("Launched child process with PID: {0}", PI.Pid);
+  }
+
+  // Get the FILE stream for the read end of the pipe
+  FILE *StdOutFile = fdopen(stdOutPipe[0], "r");
+  if (StdOutFile == NULL) {
+    elog("fdopen");
+    return;
+  }
+
+  ServerStdInStream =
+      std::make_unique<llvm::raw_fd_ostream>(stdInPipe[1], true);
+
+  Transport = newJSONTransport(StdOutFile, *ServerStdInStream, nullptr, false,
+                               JSONStreamStyle::Standard);
+}
 } // namespace clangd
 } // namespace clang

@@ -38,9 +38,11 @@ const char EnvPathSeparator = ';';
 #if defined(_WIN32)
 typedef unsigned long procid_t; // Must match the type of DWORD on Windows.
 typedef void *process_t;        // Must match the type of HANDLE on Windows.
+typedef void *pipe_t;
 #else
 using procid_t = ::pid_t;
 using process_t = procid_t;
+using pipe_t = int;
 #endif
 
 /// This struct encapsulates information about a process.
@@ -150,9 +152,10 @@ LLVM_ABI int ExecuteAndWait(
 LLVM_ABI ProcessInfo ExecuteNoWait(
     StringRef Program, ArrayRef<StringRef> Args,
     std::optional<ArrayRef<StringRef>> Env,
-    ArrayRef<std::optional<StringRef>> Redirects = {}, unsigned MemoryLimit = 0,
-    std::string *ErrMsg = nullptr, bool *ExecutionFailed = nullptr,
-    BitVector *AffinityMask = nullptr,
+    ArrayRef<std::optional<StringRef>> Redirects = {},
+    ArrayRef<std::optional<std::array<pipe_t, 2>>> PipeRedirects = {},
+    unsigned MemoryLimit = 0, std::string *ErrMsg = nullptr,
+    bool *ExecutionFailed = nullptr, BitVector *AffinityMask = nullptr,
     /// If true the executed program detatches from the controlling
     /// terminal. I/O streams such as llvm::outs, llvm::errs, and stdin will
     /// be closed until redirected to another output location

@@ -1,4 +1,4 @@
-//===- Win32/Program.cpp - Win32 Program Implementation ------- -*- C++ -*-===//
+//===- Win32/Program.inc - Win32 Program Implementation ------- -*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.

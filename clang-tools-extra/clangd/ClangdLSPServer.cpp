@@ -547,7 +547,9 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
   Opts.ImplicitCancellation = !Params.capabilities.CancelsStaleRequests;
   Opts.PublishInactiveRegions = Params.capabilities.InactiveRegions;
 
-  if (Opts.UseDirBasedCDB) {
+  if (!Opts.BuildServer.empty()) {
+    BaseCDB = std::make_unique<BSPGlobalCompilationDatabase>(Opts.BuildServer);
+  } else if (Opts.UseDirBasedCDB) {
     DirectoryBasedGlobalCompilationDatabase::Options CDBOpts(TFS);
     if (const auto &Dir = Params.initializationOptions.compilationDatabasePath)
       CDBOpts.CompileCommandsDir = Dir;
@@ -556,8 +558,6 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
       CDBOpts.applyFallbackWorkingDirectory(Opts.WorkspaceRoot);
     BaseCDB =
         std::make_unique<DirectoryBasedGlobalCompilationDatabase>(CDBOpts);
-  } else if (Opts.UseBuildServerCDB) {
-    BaseCDB = std::make_unique<BSPGlobalCompilationDatabase>();
   }
   auto Mangler = CommandMangler::detect();
   Mangler.SystemIncludeExtractor =

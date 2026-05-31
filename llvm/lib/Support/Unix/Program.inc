@@ -165,6 +165,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
                     ArrayRef<StringRef> Args,
                     std::optional<ArrayRef<StringRef>> Env,
                     ArrayRef<std::optional<StringRef>> Redirects,
+                    ArrayRef<std::optional<std::array<pipe_t, 2>>> PipeRedirects,
                     unsigned MemoryLimit, std::string *ErrMsg,
                     BitVector *AffinityMask, bool DetachProcess) {
   assert(!AffinityMask && "Starting a process with an affinity mask is "
@@ -184,7 +185,7 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
 
   // If this OS has posix_spawn and there is no memory limit being implied, use
   // posix_spawn.  It is more efficient than fork/exec.
-#ifdef HAVE_POSIX_SPAWN
+#ifdef HAVE_POSIX_SPAWN2
   // Cannot use posix_spawn if you would like to detach the process
   if (MemoryLimit == 0 && !DetachProcess) {
     posix_spawn_file_actions_t FileActionsStore;
@@ -289,6 +290,48 @@ static bool Execute(ProcessInfo &PI, StringRef Program,
           return false;
         }
       }
+    } else if (!PipeRedirects.empty()) {
+      auto& StdInPipe = PipeRedirects[0];
+      auto& StdOutPipe = PipeRedirects[1];
+      auto& StdErrPipe = PipeRedirects[2];
+
+      if (StdInPipe) {
+        // Close the pipes used by the parent process
+        close(StdInPipe.value()[1]);
+        // Redirect stdin to the pipe write
+        if (dup2(StdInPipe.value()[0], STDIN_FILENO) != STDIN_FILENO) {
+          MakeErrMsg(ErrMsg, "dup2 error to stdin");
+          return false;
+        }
+        // Close our handle on the child process
+        close(StdInPipe.value()[0]);
+      }
+
+      if (StdOutPipe) {
+        // Close the pipes used by the parent process
+        close(StdOutPipe.value()[0]);
+        // Redirect stdout to the pipe write
+        if (dup2(StdOutPipe.value()[1], STDOUT_FILENO) != STDOUT_FILENO) {
+          MakeErrMsg(ErrMsg, "dup2 error to stdout");
+          return false;
+        }
+        // Close our handle on the child process
+        close(StdInPipe.value()[1]);
+      }
+
+      if (StdErrPipe) {
+        // Close the pipes used by the parent process
+        close(StdErrPipe.value()[0]);
+        // Redirect stderr to the pipe write
+        if (dup2(StdErrPipe.value()[1], STDERR_FILENO) != STDERR_FILENO) {
+          MakeErrMsg(ErrMsg, "dup2 error to stderr");
+          return false;
+        }
+        // Close our handle on the child process
+        close(StdErrPipe.value()[1]);
+      }
+
+      // TODO: Handle error cleanup better...
     }
 
     if (DetachProcess) {

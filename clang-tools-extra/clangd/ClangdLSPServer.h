@@ -44,10 +44,7 @@ public:
     config::Provider *ConfigProvider = nullptr;
     /// Look for compilation databases, rather than using compile commands
     /// set via LSP (extensions) only.
-    bool UseDirBasedCDB = false;
-    /// Use a BSP to interoperate with the build system to get compile
-    /// commands and ensure modules are pre-built.
-    bool UseBuildServerCDB = true;
+    bool UseDirBasedCDB = true;
     /// The offset-encoding to use, or std::nullopt to negotiate it over LSP.
     std::optional<OffsetEncoding> Encoding;
     /// If set, periodically called to release memory.
@@ -69,6 +66,9 @@ public:
 
     /// Flag to hint the experimental modules support is enabled.
     bool EnableExperimentalModulesSupport = false;
+
+    /// Optional path to the Build Server that provides build system integration
+    Path BuildServer = {};
   };
 
   ClangdLSPServer(Transport &Transp, const ThreadsafeFS &TFS,

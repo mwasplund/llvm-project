@@ -22,12 +22,13 @@ using namespace sys;
 //===          independent code.
 //===----------------------------------------------------------------------===//
 
-static bool Execute(ProcessInfo &PI, StringRef Program,
-                    ArrayRef<StringRef> Args,
-                    std::optional<ArrayRef<StringRef>> Env,
-                    ArrayRef<std::optional<StringRef>> Redirects,
-                    unsigned MemoryLimit, std::string *ErrMsg,
-                    BitVector *AffinityMask, bool DetachProcess);
+static bool
+Execute(ProcessInfo &PI, StringRef Program, ArrayRef<StringRef> Args,
+        std::optional<ArrayRef<StringRef>> Env,
+        ArrayRef<std::optional<StringRef>> Redirects,
+        ArrayRef<std::optional<std::array<pipe_t, 2>>> PipeRedirects,
+        unsigned MemoryLimit, std::string *ErrMsg, BitVector *AffinityMask,
+        bool DetachProcess);
 
 int sys::ExecuteAndWait(StringRef Program, ArrayRef<StringRef> Args,
                         std::optional<ArrayRef<StringRef>> Env,
@@ -38,7 +39,7 @@ int sys::ExecuteAndWait(StringRef Program, ArrayRef<StringRef> Args,
                         BitVector *AffinityMask) {
   assert(Redirects.empty() || Redirects.size() == 3);
   ProcessInfo PI;
-  if (Execute(PI, Program, Args, Env, Redirects, MemoryLimit, ErrMsg,
+  if (Execute(PI, Program, Args, Env, Redirects, {}, MemoryLimit, ErrMsg,
               AffinityMask, /*DetachProcess=*/false)) {
     if (ExecutionFailed)
       *ExecutionFailed = false;
@@ -54,18 +55,22 @@ int sys::ExecuteAndWait(StringRef Program, ArrayRef<StringRef> Args,
   return -1;
 }
 
-ProcessInfo sys::ExecuteNoWait(StringRef Program, ArrayRef<StringRef> Args,
-                               std::optional<ArrayRef<StringRef>> Env,
-                               ArrayRef<std::optional<StringRef>> Redirects,
-                               unsigned MemoryLimit, std::string *ErrMsg,
-                               bool *ExecutionFailed, BitVector *AffinityMask,
-                               bool DetachProcess) {
-  assert(Redirects.empty() || Redirects.size() == 3);
+ProcessInfo
+sys::ExecuteNoWait(StringRef Program, ArrayRef<StringRef> Args,
+                   std::optional<ArrayRef<StringRef>> Env,
+                   ArrayRef<std::optional<StringRef>> Redirects,
+                   ArrayRef<std::optional<std::array<pipe_t, 2>>> PipeRedirects,
+                   unsigned MemoryLimit, std::string *ErrMsg,
+                   bool *ExecutionFailed, BitVector *AffinityMask,
+                   bool DetachProcess) {
+  assert(
+      (Redirects.empty() || (Redirects.size() == 3 && PipeRedirects.empty())) &&
+      (PipeRedirects.empty() || PipeRedirects.size() == 3));
   ProcessInfo PI;
   if (ExecutionFailed)
     *ExecutionFailed = false;
-  if (!Execute(PI, Program, Args, Env, Redirects, MemoryLimit, ErrMsg,
-               AffinityMask, DetachProcess))
+  if (!Execute(PI, Program, Args, Env, Redirects, PipeRedirects, MemoryLimit,
+               ErrMsg, AffinityMask, DetachProcess))
     if (ExecutionFailed)
       *ExecutionFailed = true;
 

@@ -11,7 +11,8 @@
 namespace clang {
 namespace clangd {
 
-BSPGlobalCompilationDatabase::BSPGlobalCompilationDatabase() {}
+BSPGlobalCompilationDatabase::BSPGlobalCompilationDatabase(Path BuildServer)
+    : Client(BuildServer) {}
 
 BSPGlobalCompilationDatabase::~BSPGlobalCompilationDatabase() = default;
 

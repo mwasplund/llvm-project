@@ -64,8 +64,8 @@ include_directories(BEFORE "${CMAKE_CURRENT_SOURCE_DIR}/../include-cleaner/inclu
 add_clang_library(clangDaemon STATIC
   AST.cpp
   ASTSignals.cpp
+  BSPClient.cpp
   BSPGlobalCompilationDatabase.cpp
-  ClangdBSPClient.cpp
   ClangdLSPServer.cpp
   ClangdServer.cpp
   CodeComplete.cpp

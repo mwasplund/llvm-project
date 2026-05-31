@@ -9,6 +9,7 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_BSPGLOBALCOMPILATIONDATABASE_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_BSPGLOBALCOMPILATIONDATABASE_H
 
+#include "BSPClient.h"
 #include "GlobalCompilationDatabase.h"
 #include "ProjectModules.h"
 #include "support/Path.h"
@@ -22,7 +23,7 @@ namespace clangd {
 
 class BSPGlobalCompilationDatabase : public GlobalCompilationDatabase {
 public:
-  BSPGlobalCompilationDatabase();
+  BSPGlobalCompilationDatabase(Path BuildServer);
   ~BSPGlobalCompilationDatabase() override;
 
   std::optional<tooling::CompileCommand>
@@ -36,6 +37,7 @@ public:
   bool blockUntilIdle(Deadline Timeout) const override;
 
 private:
+  BSPClient Client;
 };
 
 } // namespace clangd
