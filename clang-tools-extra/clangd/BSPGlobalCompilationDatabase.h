@@ -37,7 +37,7 @@ public:
   bool blockUntilIdle(Deadline Timeout) const override;
 
 private:
-  BSPClient Client;
+  std::shared_ptr<BSPClient> Client;
 };
 
 } // namespace clangd

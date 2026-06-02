@@ -12,7 +12,9 @@ namespace clang {
 namespace clangd {
 
 BSPGlobalCompilationDatabase::BSPGlobalCompilationDatabase(Path BuildServer)
-    : Client(BuildServer) {}
+    : Client(std::make_shared<BSPClient>(BuildServer)) {
+  Client->startWorker();
+}
 
 BSPGlobalCompilationDatabase::~BSPGlobalCompilationDatabase() = default;
 

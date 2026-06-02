@@ -207,7 +207,7 @@ bool readLine(std::FILE *In, llvm::SmallVectorImpl<char> &Out) {
     Out.resize_for_overwrite(Size + BufSize);
     // Handle EINTR which is sent when a debugger attaches on some platforms.
     if (!retryAfterSignalUnlessShutdown(
-            nullptr, [&] { return std::fgets(&Out[Size], BufSize, In); }))
+        nullptr, [&] { return std::fgets(&Out[Size], BufSize, In); }))
       return false;
     clearerr(In);
     // If the line contained null bytes, anything after it (including \n) will
@@ -276,9 +276,8 @@ bool JSONTransport::readStandardMessage(std::string &JSON) {
   JSON.resize(ContentLength);
   for (size_t Pos = 0, Read; Pos < ContentLength; Pos += Read) {
     // Handle EINTR which is sent when a debugger attaches on some platforms.
-    Read = retryAfterSignalUnlessShutdown(0, [&]{
-      return std::fread(&JSON[Pos], 1, ContentLength - Pos, In);
-    });
+    Read = retryAfterSignalUnlessShutdown(
+        0, [&] { return std::fread(&JSON[Pos], 1, ContentLength - Pos, In); });
     if (Read == 0) {
       elog("Input was aborted. Read only {0} bytes of expected {1}.", Pos,
            ContentLength);

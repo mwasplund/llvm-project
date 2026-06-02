@@ -391,8 +391,7 @@ public:
   PreambleThrottlerRequest(llvm::StringRef Filename,
                            PreambleThrottler *Throttler,
                            std::condition_variable &CV)
-      : Throttler(Throttler),
-        Satisfied(Throttler == nullptr) {
+      : Throttler(Throttler), Satisfied(Throttler == nullptr) {
     // If there is no throttler, this dummy request is always satisfied.
     if (!Throttler)
       return;
@@ -571,9 +570,9 @@ private:
   void build(Request Req);
 
   mutable std::mutex Mutex;
-  bool Done = false;                  /* GUARDED_BY(Mutex) */
-  std::optional<Request> NextReq;     /* GUARDED_BY(Mutex) */
-  std::optional<Request> CurrentReq;  /* GUARDED_BY(Mutex) */
+  bool Done = false;                 /* GUARDED_BY(Mutex) */
+  std::optional<Request> NextReq;    /* GUARDED_BY(Mutex) */
+  std::optional<Request> CurrentReq; /* GUARDED_BY(Mutex) */
   // Signaled whenever a thread populates NextReq or worker thread builds a
   // Preamble.
   mutable std::condition_variable ReqCV; /* GUARDED_BY(Mutex) */
@@ -737,9 +736,9 @@ private:
   llvm::SmallVector<DebouncePolicy::clock::duration>
       RebuildTimes; /* GUARDED_BY(Mutex) */
   /// Set to true to signal run() to finish processing.
-  bool Done;                              /* GUARDED_BY(Mutex) */
-  std::deque<Request> Requests;           /* GUARDED_BY(Mutex) */
-  std::optional<Request> CurrentRequest;  /* GUARDED_BY(Mutex) */
+  bool Done;                             /* GUARDED_BY(Mutex) */
+  std::deque<Request> Requests;          /* GUARDED_BY(Mutex) */
+  std::optional<Request> CurrentRequest; /* GUARDED_BY(Mutex) */
   /// Signalled whenever a new request has been scheduled or processing of a
   /// request has completed.
   mutable std::condition_variable RequestsCV;

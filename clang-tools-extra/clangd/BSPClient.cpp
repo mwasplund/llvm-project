@@ -9,8 +9,11 @@
 #include "BSPClient.h"
 #include "support/Logger.h"
 #include "support/Trace.h"
+#include "llvm/Support/Threading.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/thread.h"
 #include <array>
+#include <deque>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -40,18 +43,18 @@ public:
     SPAN_ATTACH(Tracer, "Params", Params);
     // WithContext HandlerContext(handlerContext());
     log("<-- {0}", Method);
-    // auto Handler = Server.Handlers.NotificationHandlers.find(Method);
-    // if (Handler != Server.Handlers.NotificationHandlers.end()) {
-    //   Handler->second(std::move(Params));
-    //   Server.maybeExportMemoryProfile();
-    //   Server.maybeCleanupMemory();
-    // } else if (!Server.Server) {
-    //   elog("Notification {0} before initialization", Method);
-    // } else if (Method == "$/cancelRequest") {
-    //   onCancel(std::move(Params));
-    // } else {
-    //   log("unhandled notification {0}", Method);
-    // }
+    auto Handler = Client.Handlers.NotificationHandlers.find(Method);
+    if (Handler != Client.Handlers.NotificationHandlers.end()) {
+      Handler->second(std::move(Params));
+      // Client.maybeExportMemoryProfile();
+      // Client.maybeCleanupMemory();
+    } else if (!Client.Server) {
+      elog("Notification {0} before initialization", Method);
+    } else if (Method == "$/cancelRequest") {
+      // onCancel(std::move(Params));
+    } else {
+      log("unhandled notification {0}", Method);
+    }
     return true;
   }
 
@@ -82,68 +85,68 @@ public:
                llvm::Expected<llvm::json::Value> Result) override {
     // WithContext HandlerContext(handlerContext());
     //
-    // Callback<llvm::json::Value> ReplyHandler = nullptr;
-    // if (auto IntID = ID.getAsInteger()) {
-    //   std::lock_guard<std::mutex> Mutex(CallMutex);
-    //   // Find a corresponding callback for the request ID;
-    //   for (size_t Index = 0; Index < ReplyCallbacks.size(); ++Index) {
-    //     if (ReplyCallbacks[Index].first == *IntID) {
-    //       ReplyHandler = std::move(ReplyCallbacks[Index].second);
-    //       ReplyCallbacks.erase(ReplyCallbacks.begin() +
-    //                            Index); // remove the entry
-    //       break;
-    //     }
-    //   }
-    // }
-    //
-    // if (!ReplyHandler) {
-    //   // No callback being found, use a default log callback.
-    //   ReplyHandler = [&ID](llvm::Expected<llvm::json::Value> Result) {
-    //     elog("received a reply with ID {0}, but there was no such call", ID);
-    //     if (!Result)
-    //       llvm::consumeError(Result.takeError());
-    //   };
-    // }
-    //
-    // // Log and run the reply handler.
-    // if (Result) {
-    //   log("<-- reply({0})", ID);
-    //   ReplyHandler(std::move(Result));
-    // } else {
-    //   auto Err = Result.takeError();
-    //   log("<-- reply({0}) error: {1}", ID, Err);
-    //   ReplyHandler(std::move(Err));
-    // }
+    Callback<llvm::json::Value> ReplyHandler = nullptr;
+    if (auto IntID = ID.getAsInteger()) {
+      std::lock_guard<std::mutex> Mutex(CallMutex);
+      // Find a corresponding callback for the request ID;
+      for (size_t Index = 0; Index < ReplyCallbacks.size(); ++Index) {
+        if (ReplyCallbacks[Index].first == *IntID) {
+          ReplyHandler = std::move(ReplyCallbacks[Index].second);
+          ReplyCallbacks.erase(ReplyCallbacks.begin() +
+                               Index); // remove the entry
+          break;
+        }
+      }
+    }
+
+    if (!ReplyHandler) {
+      // No callback being found, use a default log callback.
+      ReplyHandler = [&ID](llvm::Expected<llvm::json::Value> Result) {
+        elog("received a reply with ID {0}, but there was no such call", ID);
+        if (!Result)
+          llvm::consumeError(Result.takeError());
+      };
+    }
+
+    // Log and run the reply handler.
+    if (Result) {
+      log("<-- reply({0})", ID);
+      ReplyHandler(std::move(Result));
+    } else {
+      auto Err = Result.takeError();
+      log("<-- reply({0}) error: {1}", ID, Err);
+      ReplyHandler(std::move(Err));
+    }
     return true;
   }
 
   // Bind a reply callback to a request. The callback will be invoked when
   // clangd receives the reply from the LSP client.
   // Return a call id of the request.
-  // llvm::json::Value bindReply(Callback<llvm::json::Value> Reply) {
-  //   std::optional<std::pair<int, Callback<llvm::json::Value>>> OldestCB;
-  //   int ID;
-  //   {
-  //     std::lock_guard<std::mutex> Mutex(CallMutex);
-  //     ID = NextCallID++;
-  //     ReplyCallbacks.emplace_back(ID, std::move(Reply));
-  //
-  //     // If the queue overflows, we assume that the client didn't reply the
-  //     // oldest request, and run the corresponding callback which replies an
-  //     // error to the client.
-  //     if (ReplyCallbacks.size() > MaxReplayCallbacks) {
-  //       elog("more than {0} outstanding LSP calls, forgetting about {1}",
-  //            MaxReplayCallbacks, ReplyCallbacks.front().first);
-  //       OldestCB = std::move(ReplyCallbacks.front());
-  //       ReplyCallbacks.pop_front();
-  //     }
-  //   }
-  //   if (OldestCB)
-  //     OldestCB->second(
-  //         error("failed to receive a client reply for request ({0})",
-  //               OldestCB->first));
-  //   return ID;
-  // }
+  llvm::json::Value bindReply(Callback<llvm::json::Value> Reply) {
+    std::optional<std::pair<int, Callback<llvm::json::Value>>> OldestCB;
+    int ID;
+    {
+      std::lock_guard<std::mutex> Mutex(CallMutex);
+      ID = NextCallID++;
+      ReplyCallbacks.emplace_back(ID, std::move(Reply));
+
+      // If the queue overflows, we assume that the client didn't reply the
+      // oldest request, and run the corresponding callback which replies an
+      // error to the client.
+      if (ReplyCallbacks.size() > MaxReplayCallbacks) {
+        elog("more than {0} outstanding LSP calls, forgetting about {1}",
+             MaxReplayCallbacks, ReplyCallbacks.front().first);
+        OldestCB = std::move(ReplyCallbacks.front());
+        ReplyCallbacks.pop_front();
+      }
+    }
+    if (OldestCB)
+      OldestCB->second(
+          error("failed to receive a client reply for request ({0})",
+                OldestCB->first));
+    return ID;
+  }
 
 private:
   // Function object to reply to an LSP call.
@@ -276,12 +279,12 @@ private:
   // for cases where LSP clients don't reply for the request.
   // This has to go after RequestCancellers and RequestCancellersMutex since it
   // can contain a callback that has a cancelable context.
-  // static constexpr int MaxReplayCallbacks = 100;
-  // mutable std::mutex CallMutex;
-  // int NextCallID = 0; /* GUARDED_BY(CallMutex) */
-  // std::deque<std::pair</*RequestID*/ int,
-  //                      /*ReplyHandler*/ Callback<llvm::json::Value>>>
-  //     ReplyCallbacks; /* GUARDED_BY(CallMutex) */
+  static constexpr int MaxReplayCallbacks = 100;
+  mutable std::mutex CallMutex;
+  int NextCallID = 0; /* GUARDED_BY(CallMutex) */
+  std::deque<std::pair</*RequestID*/ int,
+                       /*ReplyHandler*/ Callback<llvm::json::Value>>>
+      ReplyCallbacks; /* GUARDED_BY(CallMutex) */
 
   BSPClient &Client;
 };
@@ -289,56 +292,41 @@ private:
 BSPClient::BSPClient(Path BuildServer)
     : BuildServer(BuildServer), Transport(),
       MsgHandler(new MessageHandler(*this)) {
-  launchServer();
-  run();
 }
 
 BSPClient::~BSPClient() {}
 
-bool BSPClient::run() {
-  auto ParamsTest = llvm::json::Value(llvm::json::Object{
-      {"test", "123"},
-  });
-  auto IdTest = llvm::json::Value(123);
-  Transport->call("initialize", ParamsTest, IdTest);
+void BSPClient::startWorker() {
+  auto Task = [self = shared_from_this()]() {
+    llvm::set_thread_name("BSPClient");
+    self->launchServer();
+    self->sendInitialize();
+    self->run();
+  };
 
-  // Run the Build Server loop.
-  bool CleanExit = true;
-  if (auto Err = Transport->loop(*MsgHandler)) {
-    elog("Transport error: {0}", std::move(Err));
-    CleanExit = false;
-  }
-
-  auto Params = llvm::json::Value(llvm::json::Object{});
-  auto Id = llvm::json::Value(123);
-  Transport->call("exit", Params, Id);
-
-  PI = llvm::sys::Wait(PI, 10 /*timeout seconds*/);
-  if (PI.ReturnCode != 0) {
-    elog("BSP server exit not success: {0}", PI.ReturnCode);
-  }
-
-  return CleanExit;
+  llvm::thread Thread(
+      /*clang::DesiredStackSize*/ std::optional<unsigned>(), std::move(Task));
+  Thread.detach();
 }
 
 void BSPClient::launchServer() {
   // Create a pipe to send stdin to child
   std::array<llvm::sys::pipe_t, 2> stdInPipe;
-  if (pipe2(stdInPipe.data(), O_NONBLOCK) < 0) {
+  if (pipe2(stdInPipe.data(), 0) < 0) {
     elog("Failed to create stdInPipe");
     return;
   }
 
   // Create a pipe to send stdout to parent
   std::array<llvm::sys::pipe_t, 2> stdOutPipe;
-  if (pipe2(stdOutPipe.data(), O_NONBLOCK) < 0) {
+  if (pipe2(stdOutPipe.data(), 0) < 0) {
     elog("Failed to create stdOutPipe");
     return;
   }
 
   // Create a pipe to send stderr to parent
   std::array<llvm::sys::pipe_t, 2> stdErrPipe;
-  if (pipe2(stdErrPipe.data(), O_NONBLOCK) < 0) {
+  if (pipe2(stdErrPipe.data(), 0) < 0) {
     elog("Failed to create stdErrPipe");
     return;
   }
@@ -362,18 +350,59 @@ void BSPClient::launchServer() {
     elog("Launched child process with PID: {0}", PI.Pid);
   }
 
+  ServerStdInPipe = stdInPipe[1];
+  ServerStdOutPipe = stdOutPipe[0];
+  ServerStdErrPipe = stdErrPipe[0];
+
   // Get the FILE stream for the read end of the pipe
-  FILE *StdOutFile = fdopen(stdOutPipe[0], "r");
-  if (StdOutFile == NULL) {
+  ServerStdOutFile = fdopen(ServerStdOutPipe, "r");
+  if (ServerStdOutFile == NULL) {
     elog("fdopen");
     return;
   }
 
   ServerStdInStream =
-      std::make_unique<llvm::raw_fd_ostream>(stdInPipe[1], true);
+      std::make_unique<llvm::raw_fd_ostream>(ServerStdInPipe, true);
 
-  Transport = newJSONTransport(StdOutFile, *ServerStdInStream, nullptr, false,
-                               JSONStreamStyle::Standard);
+  Transport = newJSONTransport(ServerStdOutFile, *ServerStdInStream, nullptr,
+                               false, JSONStreamStyle::Standard);
 }
+
+void BSPClient::sendInitialize() {
+  auto ParamsTest = llvm::json::Value(llvm::json::Object{
+      {"test", "123"},
+  });
+  Callback<llvm::json::Value> CB = [](llvm::Expected<llvm::json::Value> Result) { log("test"); };
+  callMethod("initialize", std::move(ParamsTest), std::move(CB));
+}
+
+void BSPClient::run() {
+  // Run the Build Server loop.
+  if (auto Err = Transport->loop(*MsgHandler)) {
+    elog("Transport error: {0}", std::move(Err));
+  }
+
+  PI = llvm::sys::Wait(PI, 10 /*timeout seconds*/);
+  if (PI.ReturnCode != 0) {
+    elog("BSP server exit not success: {0}", PI.ReturnCode);
+  }
+}
+
+// call(), notify(), and reply() wrap the Transport, adding logging and locking.
+void BSPClient::callMethod(StringRef Method, llvm::json::Value Params,
+                                 Callback<llvm::json::Value> CB) {
+  auto ID = MsgHandler->bindReply(std::move(CB));
+  log("--> {0}({1})", Method, ID);
+  std::lock_guard<std::mutex> Lock(TransportWriter);
+  Transport->call(Method, std::move(Params), ID);
+}
+
+void BSPClient::notify(llvm::StringRef Method, llvm::json::Value Params) {
+  log("--> {0}", Method);
+  // maybeCleanupMemory();
+  std::lock_guard<std::mutex> Lock(TransportWriter);
+  Transport->notify(Method, std::move(Params));
+}
+
 } // namespace clangd
 } // namespace clang
