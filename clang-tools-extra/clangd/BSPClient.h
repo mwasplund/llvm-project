@@ -9,23 +9,22 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_BSPCLIENT_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_BSPCLIENT_H
 
+#include "LSPBinder.h"
 #include "Transport.h"
 #include "support/Path.h"
 #include "llvm/Support/Program.h"
-#include "LSPBinder.h"
 
 namespace clang {
 namespace clangd {
 
-
 // Container for BSP server capabilities
-class BSPServer {
-};
+class BSPServer {};
 
 /// This class integrates with build system capabilities via Build Server
 /// Protocol.
 ///
-class BSPClient : private LSPBinder::RawOutgoing, public std::enable_shared_from_this<BSPClient> {
+class BSPClient : private LSPBinder::RawOutgoing,
+                  public std::enable_shared_from_this<BSPClient> {
 public:
   BSPClient(Path BuildServer);
   ~BSPClient();
@@ -35,6 +34,9 @@ public:
 
   // Create a worker thread and setup the server
   void startWorker();
+  void sendExit();
+
+  std::vector<std::string> getRequiredModules(PathRef File);
 
 private:
   // Create the child process running the BSP Server that this client connects
@@ -46,6 +48,10 @@ private:
   // Run the client loop to continuously monitor for responses from the server
   void run();
 
+private:
+  void onInitialize(llvm::Expected<llvm::json::Value> Result);
+
+private:
   // Manage lifetime of the child process that is the BSP Server
   Path BuildServer;
   llvm::sys::ProcessInfo PI;

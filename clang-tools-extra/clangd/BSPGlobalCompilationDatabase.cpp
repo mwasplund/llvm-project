@@ -11,6 +11,35 @@
 namespace clang {
 namespace clangd {
 
+class BSPProjectModules : public ProjectModules {
+public:
+  BSPProjectModules(std::shared_ptr<BSPClient> Client)
+      : Client(std::move(Client)) {}
+
+  std::vector<std::string> getRequiredModules(PathRef File) override {
+    return Client->getRequiredModules(File);
+  }
+
+  std::string getModuleNameForSource(PathRef File) override { return ""; }
+
+  ModuleNameState getModuleNameState(llvm::StringRef ModuleName) override {
+    return ModuleNameState::Unknown;
+  }
+
+  std::string getSourceForModuleName(llvm::StringRef ModuleName,
+                                     PathRef RequiredSourceFile) override {
+    return "";
+  }
+
+  void setCommandMangler(CommandMangler Mangler) override {
+    this->Mangler = std::move(Mangler);
+  }
+
+private:
+  std::shared_ptr<BSPClient> Client;
+  CommandMangler Mangler;
+};
+
 BSPGlobalCompilationDatabase::BSPGlobalCompilationDatabase(Path BuildServer)
     : Client(std::make_shared<BSPClient>(BuildServer)) {
   Client->startWorker();
@@ -34,7 +63,7 @@ BSPGlobalCompilationDatabase::getProjectInfo(PathRef File) const {
 
 std::unique_ptr<ProjectModules>
 BSPGlobalCompilationDatabase::getProjectModules(PathRef File) const {
-  return {};
+  return std::make_unique<BSPProjectModules>(Client);
 }
 
 } // namespace clangd
