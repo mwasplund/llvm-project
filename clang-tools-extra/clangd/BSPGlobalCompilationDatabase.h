@@ -15,6 +15,7 @@
 #include "support/Path.h"
 #include "support/Threading.h"
 #include "clang/Tooling/CompilationDatabase.h"
+#include "clang/Tooling/FileMatchTrie.h"
 #include <memory>
 #include <optional>
 
@@ -36,7 +37,11 @@ public:
 
   bool blockUntilIdle(Deadline Timeout) const override;
 
+  std::optional<OperationInfo> tryGetOperationInfo(PathRef File) const;
+
 private:
+  // TODO: Hack to save changing a ton of consts
+  mutable llvm::StringMap<std::optional<OperationInfo>> KnownFileOperations;
   std::shared_ptr<BSPClient> Client;
 };
 

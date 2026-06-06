@@ -20,6 +20,14 @@ namespace clangd {
 // Container for BSP server capabilities
 class BSPServer {};
 
+struct OperationInfo {
+  Path Executable;
+  Path WorkingDirectory;
+  std::vector<std::string> Arguments;
+  std::vector<Path> DeclaredInput;
+  std::vector<Path> DeclaredOutput;
+};
+
 /// This class integrates with build system capabilities via Build Server
 /// Protocol.
 ///
@@ -36,7 +44,7 @@ public:
   void startWorker();
   void sendExit();
 
-  std::vector<std::string> getRequiredModules(PathRef File);
+  std::optional<OperationInfo> getOperationInfo(PathRef File);
 
 private:
   // Create the child process running the BSP Server that this client connects

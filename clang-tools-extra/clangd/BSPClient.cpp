@@ -228,8 +228,8 @@ void BSPClient::sendExit() {
   notify("exit", std::move(ParamsTest));
 }
 
-std::vector<std::string> BSPClient::getRequiredModules(PathRef File) {
-  auto Promise = std::promise<std::vector<std::string>>();
+std::optional<OperationInfo> BSPClient::getOperationInfo(PathRef File) {
+  auto Promise = std::promise<std::optional<OperationInfo>>();
   auto Future = Promise.get_future();
   auto ParamsTest = llvm::json::Value(llvm::json::Object{
       {"file", File},
@@ -237,7 +237,43 @@ std::vector<std::string> BSPClient::getRequiredModules(PathRef File) {
   Callback<llvm::json::Value> CB =
       [Promise = std::move(Promise)](
           llvm::Expected<llvm::json::Value> Result) mutable {
-        Promise.set_value({});
+        std::optional<OperationInfo> OperationInfoResult;
+
+        if (!Result) {
+          elog("getOperationInfo failed");
+          return;
+        }
+
+        auto ResultObject = Result->getAsObject();
+        auto FindInfoResult = ResultObject->find("info");
+        if (FindInfoResult != ResultObject->end()) {
+          const auto &InfoObject = FindInfoResult->second.getAsObject();
+
+          OperationInfo OperationInfo;
+          OperationInfo.WorkingDirectory =
+              InfoObject->getString("workingDirectory").value();
+          OperationInfo.Executable =
+              InfoObject->getString("workingDirectory").value();
+
+          for (auto &Value : *InfoObject->getArray("arguments")) {
+            OperationInfo.Arguments.push_back(
+                std::string(Value.getAsString().value()));
+          }
+
+          for (auto &Value : *InfoObject->getArray("declaredInput")) {
+            OperationInfo.DeclaredInput.push_back(
+                std::string(Value.getAsString().value()));
+          }
+
+          for (auto &Value : *InfoObject->getArray("declaredOutput")) {
+            OperationInfo.DeclaredOutput.push_back(
+                std::string(Value.getAsString().value()));
+          }
+
+          OperationInfoResult = std::move(OperationInfo);
+        }
+
+        Promise.set_value(std::move(OperationInfoResult));
       };
   callMethod("textDocument/operation/get", std::move(ParamsTest),
              std::move(CB));
@@ -347,7 +383,9 @@ void BSPClient::notify(llvm::StringRef Method, llvm::json::Value Params) {
 
 void BSPClient::onInitialize(llvm::Expected<llvm::json::Value> Result) {
   log("test");
-  Server.emplace();
+
+  if (Result)
+    Server.emplace();
 }
 
 } // namespace clangd
