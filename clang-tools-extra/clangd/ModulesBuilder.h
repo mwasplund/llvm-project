@@ -85,19 +85,29 @@ public:
 /// different versions and different source files.
 class ModulesBuilder {
 public:
-  ModulesBuilder(const GlobalCompilationDatabase &CDB);
-  ~ModulesBuilder();
+  virtual ~ModulesBuilder() = default;
 
-  ModulesBuilder(const ModulesBuilder &) = delete;
-  ModulesBuilder(ModulesBuilder &&) = delete;
+  virtual std::unique_ptr<PrerequisiteModules>
+  buildPrerequisiteModulesFor(PathRef File, const ThreadsafeFS &TFS) = 0;
 
-  ModulesBuilder &operator=(const ModulesBuilder &) = delete;
-  ModulesBuilder &operator=(ModulesBuilder &&) = delete;
+  virtual bool hasRequiredModules(PathRef File) = 0;
+};
+
+class InProcessModulesBuilder : public ModulesBuilder {
+public:
+  InProcessModulesBuilder(const GlobalCompilationDatabase &CDB);
+  ~InProcessModulesBuilder() override;
+
+  InProcessModulesBuilder(const ModulesBuilder &) = delete;
+  InProcessModulesBuilder(ModulesBuilder &&) = delete;
+
+  InProcessModulesBuilder &operator=(const ModulesBuilder &) = delete;
+  InProcessModulesBuilder &operator=(ModulesBuilder &&) = delete;
 
   std::unique_ptr<PrerequisiteModules>
-  buildPrerequisiteModulesFor(PathRef File, const ThreadsafeFS &TFS);
+  buildPrerequisiteModulesFor(PathRef File, const ThreadsafeFS &TFS) override;
 
-  bool hasRequiredModules(PathRef File);
+  bool hasRequiredModules(PathRef File) override;
 
 private:
   class ModulesBuilderImpl;

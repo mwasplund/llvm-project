@@ -568,7 +568,10 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
               std::move(Mangler));
 
   if (Opts.EnableExperimentalModulesSupport) {
-    ModulesManager.emplace(*CDB);
+    if (!Opts.BuildServer.empty())
+      ModulesManager = std::make_unique<BSPModulesBuilder>();
+    else
+      ModulesManager = std::make_unique<InProcessModulesBuilder>(*CDB);
     Opts.ModulesManager = &*ModulesManager;
   }
 

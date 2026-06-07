@@ -253,7 +253,7 @@ std::optional<OperationInfo> BSPClient::getOperationInfo(PathRef File) {
           OperationInfo.WorkingDirectory =
               InfoObject->getString("workingDirectory").value();
           OperationInfo.Executable =
-              InfoObject->getString("workingDirectory").value();
+              InfoObject->getString("executable").value();
 
           for (auto &Value : *InfoObject->getArray("arguments")) {
             OperationInfo.Arguments.push_back(

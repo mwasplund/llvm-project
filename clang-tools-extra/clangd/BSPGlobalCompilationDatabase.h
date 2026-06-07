@@ -11,6 +11,7 @@
 
 #include "BSPClient.h"
 #include "GlobalCompilationDatabase.h"
+#include "ModulesBuilder.h"
 #include "ProjectModules.h"
 #include "support/Path.h"
 #include "support/Threading.h"
@@ -21,6 +22,23 @@
 
 namespace clang {
 namespace clangd {
+
+class BSPModulesBuilder : public ModulesBuilder {
+public:
+  BSPModulesBuilder();
+  ~BSPModulesBuilder() override;
+
+  BSPModulesBuilder(const ModulesBuilder &) = delete;
+  BSPModulesBuilder(ModulesBuilder &&) = delete;
+
+  BSPModulesBuilder &operator=(const ModulesBuilder &) = delete;
+  BSPModulesBuilder &operator=(ModulesBuilder &&) = delete;
+
+  std::unique_ptr<PrerequisiteModules>
+  buildPrerequisiteModulesFor(PathRef File, const ThreadsafeFS &TFS) override;
+
+  bool hasRequiredModules(PathRef File) override;
+};
 
 class BSPGlobalCompilationDatabase : public GlobalCompilationDatabase {
 public:

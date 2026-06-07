@@ -269,8 +269,8 @@ parseBuildDatabaseJSON(PathRef Path, llvm::StringRef Data, std::string &Error) {
 }
 // Adapt CDB-loading functions to a common interface for DirectoryCache::load().
 static std::unique_ptr<tooling::CompilationDatabase>
-parseComplilationCommandsJSON(PathRef Path, llvm::StringRef Data,
-                              std::string &Error) {
+parseCompilationCommandsJSON(PathRef Path, llvm::StringRef Data,
+                             std::string &Error) {
   if (auto CDB = tooling::JSONCompilationDatabase::loadFromBuffer(
           Data, Error, tooling::JSONCommandLineSyntax::AutoDetect)) {
     // FS used for expanding response files.
@@ -312,8 +312,8 @@ bool DirectoryBasedGlobalCompilationDatabase::DirectoryCache::load(
   for (const auto &Entry :
        {CDBFile{&BuildDatabaseJson, parseBuildDatabaseJSON},
         CDBFile{&BuildBuildDatabaseJson, parseBuildDatabaseJSON},
-        CDBFile{&CompileCommandsJson, parseComplilationCommandsJSON},
-        CDBFile{&BuildCompileCommandsJson, parseComplilationCommandsJSON},
+        CDBFile{&CompileCommandsJson, parseCompilationCommandsJSON},
+        CDBFile{&BuildCompileCommandsJson, parseCompilationCommandsJSON},
         CDBFile{&CompileFlagsTxt, parseFixed}}) {
     bool Active = ActiveCachedFile == Entry.File;
     auto Loaded = Entry.File->load(FS, Active);

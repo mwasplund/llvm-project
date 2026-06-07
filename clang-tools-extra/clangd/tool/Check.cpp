@@ -105,8 +105,7 @@ llvm::cl::opt<bool> CheckCompletion{
     llvm::cl::desc("Run code-completion at each point (slow)"),
     llvm::cl::init(false)};
 llvm::cl::opt<bool> CheckWarnings{
-    "check-warnings",
-    llvm::cl::desc("Print warnings as well as errors"),
+    "check-warnings", llvm::cl::desc("Print warnings as well as errors"),
     llvm::cl::init(false)};
 
 // Print the diagnostics meeting severity threshold, and return count of errors.
@@ -151,7 +150,7 @@ class Checker {
   ParseInputs Inputs;
   std::unique_ptr<CompilerInvocation> Invocation;
   format::FormatStyle Style;
-  std::optional<ModulesBuilder> ModulesManager;
+  std::unique_ptr<ModulesBuilder> ModulesManager;
   // from buildAST
   std::shared_ptr<const PreambleData> Preamble;
   std::optional<ParsedAST> AST;
@@ -221,7 +220,7 @@ public:
     }
     if (Opts.EnableExperimentalModulesSupport) {
       if (!ModulesManager)
-        ModulesManager.emplace(*CDB);
+        ModulesManager = std::make_unique<InProcessModulesBuilder>(*CDB);
       Inputs.ModulesManager = &*ModulesManager;
     }
     log("Parsing command...");
@@ -281,9 +280,9 @@ public:
         elog("-{0} requires -DCLANGD_TIDY_CHECKS!", CheckTidyTime.ArgStr);
         return false;
       }
-      #ifndef NDEBUG
+#ifndef NDEBUG
       elog("Timing clang-tidy checks in asserts-mode is not representative!");
-      #endif
+#endif
       checkTidyTimes();
     }
 
@@ -360,7 +359,7 @@ public:
       }
     };
 
-    for (const auto& Check : listTidyChecks(CheckTidyTime)) {
+    for (const auto &Check : listTidyChecks(CheckTidyTime)) {
       // vlog the check name in case we crash!
       vlog("  Timing {0}", Check);
       double Fraction = Measure(Check);

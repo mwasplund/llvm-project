@@ -1003,7 +1003,7 @@ void garbageCollectModuleCache(PathRef CacheRoot) {
 
 } // namespace
 
-class ModulesBuilder::ModulesBuilderImpl {
+class InProcessModulesBuilder::ModulesBuilderImpl {
 public:
   ModulesBuilderImpl(const GlobalCompilationDatabase &CDB)
       : CDB(CDB), Cache() {}
@@ -1034,7 +1034,7 @@ private:
   llvm::StringSet<> GarbageCollectedProjectRoots;
 };
 
-void ModulesBuilder::ModulesBuilderImpl::
+void InProcessModulesBuilder::ModulesBuilderImpl::
     garbageCollectModuleCacheForProjectRoot(PathRef ProjectRoot) {
   if (ProjectRoot.empty())
     return;
@@ -1058,7 +1058,7 @@ void ModulesBuilder::ModulesBuilderImpl::
       CacheRoot);
 }
 
-void ModulesBuilder::ModulesBuilderImpl::getPrebuiltModuleFile(
+void InProcessModulesBuilder::ModulesBuilderImpl::getPrebuiltModuleFile(
     StringRef ModuleName, PathRef ModuleUnitFileName, const ThreadsafeFS &TFS,
     ReusablePrerequisiteModules &BuiltModuleFiles) {
   auto Cmd = getCDB().getCompileCommand(ModuleUnitFileName);
@@ -1102,7 +1102,7 @@ void ModulesBuilder::ModulesBuilderImpl::getPrebuiltModuleFile(
   }
 }
 
-llvm::Error ModulesBuilder::ModulesBuilderImpl::getOrBuildModuleFile(
+llvm::Error InProcessModulesBuilder::ModulesBuilderImpl::getOrBuildModuleFile(
     PathRef RequiredSource, StringRef ModuleName, const ThreadsafeFS &TFS,
     CachingProjectModules &MDB, ReusablePrerequisiteModules &BuiltModuleFiles) {
   if (BuiltModuleFiles.isModuleUnitBuilt(ModuleName))
@@ -1217,7 +1217,7 @@ llvm::Error ModulesBuilder::ModulesBuilderImpl::getOrBuildModuleFile(
   return llvm::Error::success();
 }
 
-bool ModulesBuilder::hasRequiredModules(PathRef File) {
+bool InProcessModulesBuilder::hasRequiredModules(PathRef File) {
   std::unique_ptr<ProjectModules> MDB = Impl->getCDB().getProjectModules(File);
   if (!MDB)
     return false;
@@ -1228,8 +1228,8 @@ bool ModulesBuilder::hasRequiredModules(PathRef File) {
 }
 
 std::unique_ptr<PrerequisiteModules>
-ModulesBuilder::buildPrerequisiteModulesFor(PathRef File,
-                                            const ThreadsafeFS &TFS) {
+InProcessModulesBuilder::buildPrerequisiteModulesFor(PathRef File,
+                                                     const ThreadsafeFS &TFS) {
   std::unique_ptr<ProjectModules> MDB = Impl->getCDB().getProjectModules(File);
   if (!MDB) {
     elog("Failed to get Project Modules information for {0}", File);
@@ -1257,11 +1257,12 @@ ModulesBuilder::buildPrerequisiteModulesFor(PathRef File,
   return std::move(RequiredModules);
 }
 
-ModulesBuilder::ModulesBuilder(const GlobalCompilationDatabase &CDB) {
+InProcessModulesBuilder::InProcessModulesBuilder(
+    const GlobalCompilationDatabase &CDB) {
   Impl = std::make_unique<ModulesBuilderImpl>(CDB);
 }
 
-ModulesBuilder::~ModulesBuilder() {}
+InProcessModulesBuilder::~InProcessModulesBuilder() {}
 
 } // namespace clangd
 } // namespace clang
